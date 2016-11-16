@@ -5,8 +5,8 @@ const overhead = 4 + 3*2
 // Packet represents a shard of a message. If enough shards from a message are
 // collected, the message can be reconstructed.
 type Packet struct {
-	MessageId    uint32
-	PacketId     uint16
+	MessageID    uint32
+	PacketID     uint16
 	ParityShards uint16
 	Packets      uint16
 	Data         []byte
@@ -15,8 +15,8 @@ type Packet struct {
 // Marshal serializes a Packet to a byte slice
 func (p *Packet) Marshal() []byte {
 	b := make([]byte, overhead+len(p.Data))
-	marshalUint32(p.MessageId, b)
-	marshalUint16(p.PacketId, b[4:])
+	marshalUint32(p.MessageID, b)
+	marshalUint16(p.PacketID, b[4:])
 	marshalUint16(p.ParityShards, b[6:])
 	marshalUint16(p.Packets, b[8:])
 	copy(b[overhead:], p.Data)
@@ -32,8 +32,8 @@ func (p *Packet) DataShards() uint16 {
 // Unmarshal deserializes a byte slice to a Packet
 func Unmarshal(b []byte) *Packet {
 	return &Packet{
-		MessageId:    unmarshalUint32(b),
-		PacketId:     unmarshalUint16(b[4:]),
+		MessageID:    unmarshalUint32(b),
+		PacketID:     unmarshalUint16(b[4:]),
 		ParityShards: unmarshalUint16(b[6:]),
 		Packets:      unmarshalUint16(b[8:]),
 		Data:         b[overhead:],

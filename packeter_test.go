@@ -40,13 +40,13 @@ func TestMake(t *testing.T) {
 		pks[i] = Unmarshal(b)
 	}
 
-	id := pks[0].MessageId
+	id := pks[0].MessageID
 	ds := pks[0].DataShards()
 	ps := pks[0].ParityShards
 	pl := pks[0].Packets
 	for i, pk := range pks {
-		assert.Equal(t, uint16(i), pk.PacketId)
-		assert.Equal(t, id, pk.MessageId)
+		assert.Equal(t, uint16(i), pk.PacketID)
+		assert.Equal(t, id, pk.MessageID)
 		assert.Equal(t, ds, pk.DataShards())
 		assert.Equal(t, ps, pk.ParityShards)
 		assert.Equal(t, pl, pk.Packets)
@@ -87,8 +87,8 @@ func TestPacketMarshalUnmarshal(t *testing.T) {
 	rand.Read(msg)
 
 	pk1 := &Packet{
-		MessageId:    1,
-		PacketId:     2,
+		MessageID:    1,
+		PacketID:     2,
 		ParityShards: 3,
 		Packets:      4,
 		Data:         msg,
@@ -148,7 +148,7 @@ func TestTTL(t *testing.T) {
 	assert.Equal(t, 0, len(p.collectors))
 
 	m := <-p.Chan()
-	assert.Equal(t, timedOut.Error(), m.Err.Error())
+	assert.Equal(t, errTimedOut.Error(), m.Err.Error())
 
 	TTL = oldTTL
 }

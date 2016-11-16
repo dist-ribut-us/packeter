@@ -1,5 +1,5 @@
-// Packeter breaks a message into Reed-Solomon shards with enough parity shards
-// to accommodate for expected losses.
+// Package packeter breaks a message into Reed-Solomon shards with enough parity
+// shards to accommodate for expected losses.
 package packeter
 
 import (
@@ -60,7 +60,7 @@ func New() *Packeter {
 // TTL sets the time that a partial message will wait until is deleted
 var TTL = time.Second * 10
 
-var timedOut = errors.New("Timed Out")
+var errTimedOut = errors.New("Timed Out")
 
 // run will periodically clear out collectors that have timed out. When there
 // are no collectors, the thread will exit.
@@ -80,7 +80,7 @@ func (p *Packeter) run() {
 				p.ch <- &Message{
 					ID:   id,
 					Addr: clctr.addr,
-					Err:  timedOut,
+					Err:  errTimedOut,
 				}
 			} else {
 				keepRunning = true
@@ -167,7 +167,7 @@ func (p *Packeter) Make(msg []byte, loss, reliability float64) ([][]byte, error)
 	}
 
 	pk := Packet{
-		MessageId:    crypto.RandUint32(),
+		MessageID:    crypto.RandUint32(),
 		Packets:      uint16(shards),
 		ParityShards: uint16(parityShards),
 	}
@@ -175,7 +175,7 @@ func (p *Packeter) Make(msg []byte, loss, reliability float64) ([][]byte, error)
 
 	pk.ParityShards = uint16(parityShards)
 	for i := 0; i < shards; i++ {
-		pk.PacketId = uint16(i)
+		pk.PacketID = uint16(i)
 		pk.Data = data[i]
 		pks[i] = pk.Marshal()
 	}
@@ -188,7 +188,7 @@ func (p *Packeter) Make(msg []byte, loss, reliability float64) ([][]byte, error)
 // has been constructed for reliability statistics.
 func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 	pk := Unmarshal(b)
-	clctr, ok := p.collectors[pk.MessageId]
+	clctr, ok := p.collectors[pk.MessageID]
 	if !ok {
 		clctr = &collector{
 			data:      make([][]byte, pk.Packets),
@@ -196,17 +196,17 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 			complete:  false,
 			addr:      addr,
 		}
-		p.collectors[pk.MessageId] = clctr
+		p.collectors[pk.MessageID] = clctr
 	} else if addr.String() != clctr.addr.String() {
 		return
 	}
 	clctr.ttl = time.Now().Add(TTL)
 	p.start()
-	clctr.collected[pk.PacketId] = true
+	clctr.collected[pk.PacketID] = true
 	if clctr.complete {
 		return
 	}
-	clctr.data[pk.PacketId] = pk.Data
+	clctr.data[pk.PacketID] = pk.Data
 	dataShards := int(pk.DataShards())
 	if len(clctr.collected) < dataShards {
 		return
@@ -215,7 +215,7 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 	enc, err := reedsolomon.New(dataShards, int(pk.ParityShards))
 	if err != nil {
 		p.ch <- &Message{
-			ID:   pk.MessageId,
+			ID:   pk.MessageID,
 			Err:  err,
 			Addr: addr,
 		}
@@ -224,7 +224,7 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 	err = enc.Reconstruct(clctr.data)
 	if err != nil {
 		p.ch <- &Message{
-			ID:   pk.MessageId,
+			ID:   pk.MessageID,
 			Err:  err,
 			Addr: addr,
 		}
@@ -236,7 +236,7 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 	err = enc.Join(&out, clctr.data, ln)
 	clctr.data = nil
 	p.ch <- &Message{
-		ID:   pk.MessageId,
+		ID:   pk.MessageID,
 		Err:  err,
 		Addr: addr,
 		Body: out.Bytes()[4:],
