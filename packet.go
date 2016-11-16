@@ -2,6 +2,8 @@ package packeter
 
 const overhead = 4 + 3*2
 
+// Packet represents a shard of a message. If enough shards from a message are
+// collected, the message can be reconstructed.
 type Packet struct {
 	MessageId    uint32
 	PacketId     uint16
@@ -10,6 +12,7 @@ type Packet struct {
 	Data         []byte
 }
 
+// Marshal serializes a Packet to a byte slice
 func (p *Packet) Marshal() []byte {
 	b := make([]byte, overhead+len(p.Data))
 	marshalUint32(p.MessageId, b)
@@ -20,10 +23,13 @@ func (p *Packet) Marshal() []byte {
 	return b
 }
 
+// DataShards returns the number of DataShards in a message, this is also the
+// number of shards needed to reconstruct the message
 func (p *Packet) DataShards() uint16 {
 	return p.Packets - p.ParityShards
 }
 
+// Unmarshal deserializes a byte slice to a Packet
 func Unmarshal(b []byte) *Packet {
 	return &Packet{
 		MessageId:    unmarshalUint32(b),

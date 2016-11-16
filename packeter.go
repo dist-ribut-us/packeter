@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+// Packeter manages the process of collecting packets and resolving them to
+// messages as well as converting a message into a set of packets
 type Packeter struct {
 	collectors   map[uint32]*collector
 	packetLength int
@@ -60,6 +62,8 @@ var TTL = time.Second * 10
 
 var timedOut = errors.New("Timed Out")
 
+// run will periodically clear out collectors that have timed out. When there
+// are no collectors, the thread will exit.
 func (p *Packeter) run() {
 	p.mtxRun.Lock()
 	p.running = true
