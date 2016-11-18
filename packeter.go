@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/dist-ribut-us/crypto"
 	"github.com/dist-ribut-us/rnet"
+	"github.com/dist-ribut-us/serial"
 	"github.com/ematvey/gostat"
 	"github.com/klauspost/reedsolomon"
 	"sync"
@@ -98,11 +99,12 @@ func (p *Packeter) run() {
 // collector collects the individual packets for a message, when enough packets
 // have arrived the message can be collected
 type collector struct {
-	data      [][]byte
-	collected map[uint16]bool
-	complete  bool
-	addr      *rnet.Addr
-	ttl       time.Time
+	data       [][]byte
+	collected  map[uint16]bool
+	complete   bool
+	addr       *rnet.Addr
+	ttl        time.Time
+	dataShards int
 }
 
 // Packetlength is the max packet length in bytes. Defaults to 10k. This cannot
@@ -135,13 +137,9 @@ func findRedundancy(dataSize, maxSize int, loss, reliability float64) (int, int)
 // target reliability and produces the packets for that message. The packets are
 // returned as a slice of byte-slices.
 func (p *Packeter) Make(msg []byte, loss, reliability float64) ([][]byte, error) {
-	l := uint32(len(msg) + 4)
-	lb := []byte{
-		byte(l),
-		byte(l >> 8),
-		byte(l >> 16),
-		byte(l >> 24),
-	}
+	// prepend message length to the start of the message
+	lb := make([]byte, 4)
+	serial.MarshalUint32(uint32(len(msg)+4), lb)
 	msg = append(lb, msg...)
 
 	dataShards, parityShards := findRedundancy(len(msg), p.packetLength, loss, reliability)
@@ -188,13 +186,17 @@ func (p *Packeter) Make(msg []byte, loss, reliability float64) ([][]byte, error)
 // has been constructed for reliability statistics.
 func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 	pk := Unmarshal(b)
+	if pk == nil {
+		return
+	}
 	clctr, ok := p.collectors[pk.MessageID]
 	if !ok {
 		clctr = &collector{
-			data:      make([][]byte, pk.Packets),
-			collected: make(map[uint16]bool),
-			complete:  false,
-			addr:      addr,
+			data:       make([][]byte, pk.Packets),
+			collected:  make(map[uint16]bool),
+			complete:   false,
+			addr:       addr,
+			dataShards: int(pk.DataShards()),
 		}
 		p.collectors[pk.MessageID] = clctr
 	} else if addr.String() != clctr.addr.String() {
@@ -231,7 +233,10 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 		return
 	}
 
-	ln := int(unmarshalUint32(clctr.data[0]))
+	if len(clctr.data[0]) < 4 {
+		return
+	}
+	ln := int(serial.UnmarshalUint32(clctr.data[0]))
 	var out bytes.Buffer
 	err = enc.Join(&out, clctr.data, ln)
 	clctr.data = nil

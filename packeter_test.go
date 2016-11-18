@@ -8,15 +8,6 @@ import (
 	"time"
 )
 
-func TestUint32Marshal(t *testing.T) {
-	ints := []uint32{0, 1, 31415}
-	for _, i := range ints {
-		b := make([]byte, 4)
-		marshalUint32(i, b)
-		assert.Equal(t, i, unmarshalUint32(b))
-	}
-}
-
 func TestFindRedundancy(t *testing.T) {
 	dataShards, parityShards := findRedundancy(20000, 1000, .05, .999)
 	assert.Equal(t, 20, dataShards)
