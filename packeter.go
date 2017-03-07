@@ -4,7 +4,6 @@ package packeter
 
 import (
 	"bytes"
-	"errors"
 	"github.com/dist-ribut-us/crypto"
 	"github.com/dist-ribut-us/rnet"
 	"github.com/dist-ribut-us/serial"
@@ -13,6 +12,13 @@ import (
 	"sync"
 	"time"
 )
+
+// this allows errors to be defined as const instead of var
+type defineErr string
+
+func (d defineErr) Error() string {
+	return string(d)
+}
 
 // Packeter manages the process of collecting packets and resolving them to
 // messages as well as converting a message into a set of packets
@@ -61,7 +67,7 @@ func New() *Packeter {
 // TTL sets the time that a partial message will wait until is deleted
 var TTL = time.Second * 10
 
-var errTimedOut = errors.New("Timed Out")
+const errTimedOut = defineErr("Timed Out")
 
 // run will periodically clear out collectors that have timed out. When there
 // are no collectors, the thread will exit.
