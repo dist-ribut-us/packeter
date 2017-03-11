@@ -214,37 +214,38 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 		return
 	}
 	clctr.complete = true
-	enc, err := reedsolomon.New(dataShards, int(pk.ParityShards))
-	if err != nil {
-		p.ch <- &Message{
-			ID:   pk.MessageID,
-			Err:  err,
-			Addr: addr,
-		}
+	msg := &Message{
+		ID:   pk.MessageID,
+		Addr: addr,
+	}
+	var enc reedsolomon.Encoder
+	enc, msg.Err = reedsolomon.New(dataShards, int(pk.ParityShards))
+	if msg.Err != nil {
+		p.ch <- msg
 		return
 	}
-	err = enc.Reconstruct(clctr.data)
-	if err != nil {
-		p.ch <- &Message{
-			ID:   pk.MessageID,
-			Err:  err,
-			Addr: addr,
-		}
+	msg.Err = enc.Reconstruct(clctr.data)
+	if msg.Err != nil {
+		p.ch <- msg
 		return
 	}
 
 	if len(clctr.data[0]) < 4 {
+		clctr.data = nil
 		return
 	}
 	ln := int(serial.UnmarshalUint32(clctr.data[0]))
-	var out bytes.Buffer
-	err = enc.Join(&out, clctr.data, ln)
+
+	out := &bytes.Buffer{}
+	msg.Err = enc.Join(out, clctr.data, ln)
+	// the data is no longer needed so it is cleared, but the collector remains in
+	// place to get data about total packet loss
 	clctr.data = nil
-	p.ch <- &Message{
-		ID:   pk.MessageID,
-		Err:  err,
-		Addr: addr,
-		Body: out.Bytes()[4:],
+	if msg.Err != nil {
+		p.ch <- msg
+		return
 	}
 
+	msg.Body = out.Bytes()[4:]
+	p.ch <- msg
 }

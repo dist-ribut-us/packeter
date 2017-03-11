@@ -16,7 +16,8 @@ type Packet struct {
 
 const overhead = 4 + 3*2
 
-// Marshal serializes a Packet to a byte slice
+// Marshal serializes a Packet to a byte slice. Prepend allows additional
+// meta-data to be added to the begining of each packet.
 func (p *Packet) Marshal() []byte {
 	b := make([]byte, overhead+len(p.Data))
 	serial.MarshalUint32(p.MessageID, b)
