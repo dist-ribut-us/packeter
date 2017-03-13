@@ -138,9 +138,11 @@ func findRedundancy(dataSize, maxSize int, loss, reliability float64) (int, int)
 // returned as a slice of byte-slices.
 func (p *Packeter) Make(msg []byte, loss, reliability float64) ([][]byte, error) {
 	// prepend message length to the start of the message
-	lb := make([]byte, 4)
-	serial.MarshalUint32(uint32(len(msg)+4), lb)
-	msg = append(lb, msg...)
+	l := len(msg) + 4
+	lb := make([]byte, l)
+	serial.MarshalUint32(uint32(l), lb)
+	copy(lb[4:], msg)
+	msg = lb
 
 	dataShards, parityShards := findRedundancy(len(msg), p.packetLength, loss, reliability)
 	if parityShards < 1 {
