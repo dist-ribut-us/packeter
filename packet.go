@@ -7,7 +7,7 @@ import (
 // Packet represents a shard of a message. If enough shards from a message are
 // collected, the message can be reconstructed.
 type Packet struct {
-	MessageID    uint32
+	PackageID    uint32
 	PacketID     uint16
 	ParityShards uint16
 	Packets      uint16
@@ -22,7 +22,7 @@ func (p *Packet) Marshal(tag []byte) []byte {
 	tl := len(tag)
 	b := make([]byte, overhead+len(p.Data)+tl)
 	copy(b, tag)
-	serial.MarshalUint32(p.MessageID, b[tl:])
+	serial.MarshalUint32(p.PackageID, b[tl:])
 	serial.MarshalUint16(p.PacketID, b[4+tl:])
 	serial.MarshalUint16(p.ParityShards, b[6+tl:])
 	serial.MarshalUint16(p.Packets, b[8+tl:])
@@ -42,7 +42,7 @@ func Unmarshal(b []byte) *Packet {
 		return nil
 	}
 	return &Packet{
-		MessageID:    serial.UnmarshalUint32(b),
+		PackageID:    serial.UnmarshalUint32(b),
 		PacketID:     serial.UnmarshalUint16(b[4:]),
 		ParityShards: serial.UnmarshalUint16(b[6:]),
 		Packets:      serial.UnmarshalUint16(b[8:]),

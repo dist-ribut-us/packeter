@@ -19,7 +19,7 @@ import (
 type Packeter struct {
 	collectors   map[uint32]*collector
 	packetLength int
-	ch           chan *Message
+	ch           chan *Package
 	running      bool
 	mtxRun       sync.Mutex
 }
@@ -34,27 +34,27 @@ func (p *Packeter) start() {
 	p.mtxRun.Unlock()
 }
 
-// Chan returns the channel that can receive Messages after the packeter has
+// Chan returns the channel that can receive Packages after the packeter has
 // reassembled them
-func (p *Packeter) Chan() <-chan *Message {
+func (p *Packeter) Chan() <-chan *Package {
 	return p.ch
 }
 
-// Message represents a message that was transmitted.
-type Message struct {
+// Package represents a message that was transmitted.
+type Package struct {
 	ID   uint32
 	Addr *rnet.Addr
 	Body []byte
 	Err  error
 }
 
-// GetBody allow Message to be abstracted as an interface
-func (m *Message) GetBody() []byte {
+// GetBody allow Package to be abstracted as an interface
+func (m *Package) GetBody() []byte {
 	return m.Body
 }
 
-// GetAddr allows Message to be abstracted as an interface
-func (m *Message) GetAddr() *rnet.Addr {
+// GetAddr allows Package to be abstracted as an interface
+func (m *Package) GetAddr() *rnet.Addr {
 	return m.Addr
 }
 
@@ -63,7 +63,7 @@ func New() *Packeter {
 	p := &Packeter{
 		collectors:   make(map[uint32]*collector),
 		packetLength: Packetlength,
-		ch:           make(chan *Message, BufferSize),
+		ch:           make(chan *Package, BufferSize),
 	}
 	return p
 }
@@ -89,7 +89,7 @@ func (p *Packeter) run() {
 			if clctr.ttl.Before(now) {
 				remove = append(remove, id)
 				if !clctr.complete {
-					p.ch <- &Message{
+					p.ch <- &Package{
 						ID:   id,
 						Addr: clctr.addr,
 						Err:  errTimedOut,
@@ -179,7 +179,7 @@ func (p *Packeter) Make(prefix, msg []byte, loss, reliability float64) ([][]byte
 	}
 
 	pk := Packet{
-		MessageID:    crypto.RandUint32(),
+		PackageID:    crypto.RandUint32(),
 		Packets:      uint16(shards),
 		ParityShards: uint16(parityShards),
 	}
@@ -203,7 +203,7 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 	if pk == nil {
 		return
 	}
-	clctr, ok := p.collectors[pk.MessageID]
+	clctr, ok := p.collectors[pk.PackageID]
 	if !ok {
 		clctr = &collector{
 			data:       make([][]byte, pk.Packets),
@@ -212,7 +212,7 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 			addr:       addr,
 			dataShards: int(pk.DataShards()),
 		}
-		p.collectors[pk.MessageID] = clctr
+		p.collectors[pk.PackageID] = clctr
 	} else if addr.String() != clctr.addr.String() {
 		return
 	}
@@ -228,8 +228,8 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 		return
 	}
 	clctr.complete = true
-	msg := &Message{
-		ID:   pk.MessageID,
+	msg := &Package{
+		ID:   pk.PackageID,
 		Addr: addr,
 	}
 	var enc reedsolomon.Encoder

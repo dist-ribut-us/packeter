@@ -32,13 +32,13 @@ func TestMake(t *testing.T) {
 		pks[i] = Unmarshal(b[1:])
 	}
 
-	id := pks[0].MessageID
+	id := pks[0].PackageID
 	ds := pks[0].DataShards()
 	ps := pks[0].ParityShards
 	pl := pks[0].Packets
 	for i, pk := range pks {
 		assert.Equal(t, uint16(i), pk.PacketID)
-		assert.Equal(t, id, pk.MessageID)
+		assert.Equal(t, id, pk.PackageID)
 		assert.Equal(t, ds, pk.DataShards())
 		assert.Equal(t, ps, pk.ParityShards)
 		assert.Equal(t, pl, pk.Packets)
@@ -79,7 +79,7 @@ func TestPacketMarshalUnmarshal(t *testing.T) {
 	rand.Read(msg)
 
 	pk1 := &Packet{
-		MessageID:    1,
+		PackageID:    1,
 		PacketID:     2,
 		ParityShards: 3,
 		Packets:      4,
