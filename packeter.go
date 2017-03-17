@@ -3,7 +3,7 @@
 package packeter
 
 import (
-	"bytes"
+	"github.com/dist-ribut-us/bufpool"
 	"github.com/dist-ribut-us/crypto"
 	"github.com/dist-ribut-us/errors"
 	"github.com/dist-ribut-us/rnet"
@@ -48,6 +48,16 @@ type Message struct {
 	Err  error
 }
 
+// GetBody allow Message to be abstracted as an interface
+func (m *Message) GetBody() []byte {
+	return m.Body
+}
+
+// GetAddr allows Message to be abstracted as an interface
+func (m *Message) GetAddr() *rnet.Addr {
+	return m.Addr
+}
+
 // New returns a new Packeter
 func New() *Packeter {
 	p := &Packeter{
@@ -78,10 +88,12 @@ func (p *Packeter) run() {
 		for id, clctr := range p.collectors {
 			if clctr.ttl.Before(now) {
 				remove = append(remove, id)
-				p.ch <- &Message{
-					ID:   id,
-					Addr: clctr.addr,
-					Err:  errTimedOut,
+				if !clctr.complete {
+					p.ch <- &Message{
+						ID:   id,
+						Addr: clctr.addr,
+						Err:  errTimedOut,
+					}
 				}
 			} else {
 				keepRunning = true
@@ -136,7 +148,7 @@ func findRedundancy(dataSize, maxSize int, loss, reliability float64) (int, int)
 // Make takes a message as a byte slice, along with the expected loss rate and
 // target reliability and produces the packets for that message. The packets are
 // returned as a slice of byte-slices.
-func (p *Packeter) Make(msg []byte, loss, reliability float64) ([][]byte, error) {
+func (p *Packeter) Make(prefix, msg []byte, loss, reliability float64) ([][]byte, error) {
 	// prepend message length to the start of the message
 	l := len(msg) + 4
 	lb := make([]byte, l)
@@ -177,7 +189,7 @@ func (p *Packeter) Make(msg []byte, loss, reliability float64) ([][]byte, error)
 	for i := 0; i < shards; i++ {
 		pk.PacketID = uint16(i)
 		pk.Data = data[i]
-		pks[i] = pk.Marshal()
+		pks[i] = pk.Marshal(prefix)
 	}
 	return pks, nil
 }
@@ -238,7 +250,7 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 	}
 	ln := int(serial.UnmarshalUint32(clctr.data[0]))
 
-	out := &bytes.Buffer{}
+	out := bufpool.Get()
 	msg.Err = enc.Join(out, clctr.data, ln)
 	// the data is no longer needed so it is cleared, but the collector remains in
 	// place to get data about total packet loss
@@ -248,6 +260,8 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 		return
 	}
 
-	msg.Body = out.Bytes()[4:]
+	msg.Body = make([]byte, 0, out.Len()-4)
+	msg.Body = append(msg.Body, out.Bytes()[4:]...)
+	bufpool.Put(out)
 	p.ch <- msg
 }

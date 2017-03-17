@@ -18,13 +18,15 @@ const overhead = 4 + 3*2
 
 // Marshal serializes a Packet to a byte slice. Prepend allows additional
 // meta-data to be added to the begining of each packet.
-func (p *Packet) Marshal() []byte {
-	b := make([]byte, overhead+len(p.Data))
-	serial.MarshalUint32(p.MessageID, b)
-	serial.MarshalUint16(p.PacketID, b[4:])
-	serial.MarshalUint16(p.ParityShards, b[6:])
-	serial.MarshalUint16(p.Packets, b[8:])
-	copy(b[overhead:], p.Data)
+func (p *Packet) Marshal(tag []byte) []byte {
+	tl := len(tag)
+	b := make([]byte, overhead+len(p.Data)+tl)
+	copy(b, tag)
+	serial.MarshalUint32(p.MessageID, b[tl:])
+	serial.MarshalUint16(p.PacketID, b[4+tl:])
+	serial.MarshalUint16(p.ParityShards, b[6+tl:])
+	serial.MarshalUint16(p.Packets, b[8+tl:])
+	copy(b[overhead+tl:], p.Data)
 	return b
 }
 

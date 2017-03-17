@@ -22,13 +22,14 @@ func TestMake(t *testing.T) {
 	p := New()
 	msg := make([]byte, ln)
 	rand.Read(msg)
-	packetBytes, err := p.Make(msg, loss, reliability)
+	packets, err := p.Make([]byte{111}, msg, loss, reliability)
 	assert.NoError(t, err)
-	assert.Equal(t, 8, len(packetBytes))
+	assert.Equal(t, 8, len(packets))
 
-	pks := make([]*Packet, len(packetBytes))
-	for i, b := range packetBytes {
-		pks[i] = Unmarshal(b)
+	pks := make([]*Packet, len(packets))
+	for i, b := range packets {
+		assert.Equal(t, byte(111), b[0])
+		pks[i] = Unmarshal(b[1:])
 	}
 
 	id := pks[0].MessageID
@@ -52,7 +53,7 @@ func TestRoundTrip(t *testing.T) {
 	p := New()
 	msg := make([]byte, ln)
 	rand.Read(msg)
-	pks, err := p.Make(msg, loss, reliability)
+	pks, err := p.Make(nil, msg, loss, reliability)
 	assert.NoError(t, err)
 	addr, err := rnet.ResolveAddr("127.0.0.1:1234")
 	assert.NoError(t, err)
@@ -85,7 +86,7 @@ func TestPacketMarshalUnmarshal(t *testing.T) {
 		Data:         msg,
 	}
 
-	pk2 := Unmarshal(pk1.Marshal())
+	pk2 := Unmarshal(pk1.Marshal(nil))
 	assert.Equal(t, pk1, pk2)
 }
 
@@ -97,7 +98,7 @@ func TestNoPairityRequired(t *testing.T) {
 	p := New()
 	msg := make([]byte, ln)
 	rand.Read(msg)
-	pks, err := p.Make(msg, loss, reliability)
+	pks, err := p.Make(nil, msg, loss, reliability)
 	assert.NoError(t, err)
 	addr, err := rnet.ResolveAddr("127.0.0.1:1234")
 	assert.NoError(t, err)
@@ -127,7 +128,7 @@ func TestTTL(t *testing.T) {
 	p := New()
 	msg := make([]byte, ln)
 	rand.Read(msg)
-	pks, err := p.Make(msg, loss, reliability)
+	pks, err := p.Make(nil, msg, loss, reliability)
 	assert.NoError(t, err)
 	addr, err := rnet.ResolveAddr("127.0.0.1:1234")
 	assert.NoError(t, err)
