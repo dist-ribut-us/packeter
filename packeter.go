@@ -4,7 +4,6 @@ package packeter
 
 import (
 	"github.com/dist-ribut-us/bufpool"
-	"github.com/dist-ribut-us/crypto"
 	"github.com/dist-ribut-us/errors"
 	"github.com/dist-ribut-us/rnet"
 	"github.com/dist-ribut-us/serial"
@@ -22,6 +21,7 @@ type Packeter struct {
 	ch           chan *Package
 	running      bool
 	mtxRun       sync.Mutex
+	Handler      func(*Package)
 }
 
 // start will start the loop the deletes timed out collectors if it is not
@@ -29,6 +29,7 @@ type Packeter struct {
 func (p *Packeter) start() {
 	p.mtxRun.Lock()
 	if !p.running {
+		p.running = true
 		go p.run()
 	}
 	p.mtxRun.Unlock()
@@ -76,12 +77,7 @@ const errTimedOut = errors.String("Timed Out")
 // run will periodically clear out collectors that have timed out. When there
 // are no collectors, the thread will exit.
 func (p *Packeter) run() {
-	p.mtxRun.Lock()
-	p.running = true
-	p.mtxRun.Unlock()
-	keepRunning := true
-	for keepRunning {
-		time.Sleep(TTL)
+	for keepRunning := true; keepRunning; time.Sleep(TTL) {
 		now := time.Now()
 		var remove []uint32
 		keepRunning = false
@@ -148,7 +144,7 @@ func findRedundancy(dataSize, maxSize int, loss, reliability float64) (int, int)
 // Make takes a message as a byte slice, along with the expected loss rate and
 // target reliability and produces the packets for that message. The packets are
 // returned as a slice of byte-slices.
-func (p *Packeter) Make(prefix, msg []byte, loss, reliability float64) ([][]byte, error) {
+func (p *Packeter) Make(prefix, msg []byte, loss, reliability float64, id uint32) ([][]byte, error) {
 	// prepend message length to the start of the message
 	l := len(msg) + 4
 	lb := make([]byte, l)
@@ -179,7 +175,7 @@ func (p *Packeter) Make(prefix, msg []byte, loss, reliability float64) ([][]byte
 	}
 
 	pk := Packet{
-		PackageID:    crypto.RandUint32(),
+		PackageID:    id,
 		Packets:      uint16(shards),
 		ParityShards: uint16(parityShards),
 	}
@@ -263,5 +259,9 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 	msg.Body = make([]byte, 0, out.Len()-4)
 	msg.Body = append(msg.Body, out.Bytes()[4:]...)
 	bufpool.Put(out)
-	p.ch <- msg
+	if p.Handler == nil {
+		p.ch <- msg
+	} else {
+		p.Handler(msg)
+	}
 }
