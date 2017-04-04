@@ -17,6 +17,7 @@ import (
 // messages as well as converting a message into a set of packets
 type Packeter struct {
 	collectors   map[uint32]*collector
+	clctrMux     sync.RWMutex
 	packetLength int
 	ch           chan *Package
 	running      bool
@@ -81,6 +82,7 @@ func (p *Packeter) run() {
 		now := time.Now()
 		var remove []uint32
 		keepRunning = false
+		p.clctrMux.RLock()
 		for id, clctr := range p.collectors {
 			if clctr.ttl.Before(now) {
 				remove = append(remove, id)
@@ -95,9 +97,12 @@ func (p *Packeter) run() {
 				keepRunning = true
 			}
 		}
+		p.clctrMux.RUnlock()
+		p.clctrMux.Lock()
 		for _, id := range remove {
 			delete(p.collectors, id)
 		}
+		p.clctrMux.Unlock()
 	}
 	p.mtxRun.Lock()
 	p.running = false
@@ -113,6 +118,7 @@ type collector struct {
 	addr       *rnet.Addr
 	ttl        time.Time
 	dataShards int
+	mux        sync.Mutex
 }
 
 // Packetlength is the max packet length in bytes. Defaults to 10k. This cannot
@@ -199,19 +205,24 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 	if pk == nil {
 		return
 	}
+	p.clctrMux.RLock()
 	clctr, ok := p.collectors[pk.PackageID]
+	p.clctrMux.RUnlock()
 	if !ok {
 		clctr = &collector{
 			data:       make([][]byte, pk.Packets),
 			collected:  make(map[uint16]bool),
-			complete:   false,
 			addr:       addr,
 			dataShards: int(pk.DataShards()),
 		}
+		p.clctrMux.Lock()
 		p.collectors[pk.PackageID] = clctr
+		p.clctrMux.Unlock()
 	} else if addr.String() != clctr.addr.String() {
 		return
 	}
+	clctr.mux.Lock()
+	defer clctr.mux.Unlock()
 	clctr.ttl = time.Now().Add(TTL)
 	p.start()
 	clctr.collected[pk.PacketID] = true
