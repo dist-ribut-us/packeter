@@ -16,24 +16,23 @@ import (
 // Packeter manages the process of collecting packets and resolving them to
 // messages as well as converting a message into a set of packets
 type Packeter struct {
-	collectors   map[uint32]*collector
-	clctrMux     sync.RWMutex
+	sync.Mutex
+	collectors   *collectors
 	packetLength int
 	ch           chan *Package
 	running      bool
-	mtxRun       sync.Mutex
 	Handler      func(*Package)
 }
 
 // start will start the loop the deletes timed out collectors if it is not
 // running
 func (p *Packeter) start() {
-	p.mtxRun.Lock()
+	p.Lock()
 	if !p.running {
 		p.running = true
 		go p.run()
 	}
-	p.mtxRun.Unlock()
+	p.Unlock()
 }
 
 // Chan returns the channel that can receive Packages after the packeter has
@@ -63,7 +62,7 @@ func (m *Package) GetAddr() *rnet.Addr {
 // New returns a new Packeter
 func New() *Packeter {
 	p := &Packeter{
-		collectors:   make(map[uint32]*collector),
+		collectors:   newcollectors(),
 		packetLength: Packetlength,
 		ch:           make(chan *Package, BufferSize),
 	}
@@ -82,8 +81,8 @@ func (p *Packeter) run() {
 		now := time.Now()
 		var remove []uint32
 		keepRunning = false
-		p.clctrMux.RLock()
-		for id, clctr := range p.collectors {
+		p.collectors.RLock()
+		for id, clctr := range p.collectors.Map {
 			if clctr.ttl.Before(now) {
 				remove = append(remove, id)
 				if !clctr.complete {
@@ -97,16 +96,12 @@ func (p *Packeter) run() {
 				keepRunning = true
 			}
 		}
-		p.clctrMux.RUnlock()
-		p.clctrMux.Lock()
-		for _, id := range remove {
-			delete(p.collectors, id)
-		}
-		p.clctrMux.Unlock()
+		p.collectors.RUnlock()
+		p.collectors.delete(remove...)
 	}
-	p.mtxRun.Lock()
+	p.Lock()
 	p.running = false
-	p.mtxRun.Unlock()
+	p.Unlock()
 }
 
 // collector collects the individual packets for a message, when enough packets
@@ -118,7 +113,7 @@ type collector struct {
 	addr       *rnet.Addr
 	ttl        time.Time
 	dataShards int
-	mux        sync.Mutex
+	sync.Mutex
 }
 
 // Packetlength is the max packet length in bytes. Defaults to 10k. This cannot
@@ -205,9 +200,7 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 	if pk == nil {
 		return
 	}
-	p.clctrMux.RLock()
-	clctr, ok := p.collectors[pk.PackageID]
-	p.clctrMux.RUnlock()
+	clctr, ok := p.collectors.get(pk.PackageID)
 	if !ok {
 		clctr = &collector{
 			data:       make([][]byte, pk.Packets),
@@ -215,14 +208,12 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 			addr:       addr,
 			dataShards: int(pk.DataShards()),
 		}
-		p.clctrMux.Lock()
-		p.collectors[pk.PackageID] = clctr
-		p.clctrMux.Unlock()
+		p.collectors.set(pk.PackageID, clctr)
 	} else if addr.String() != clctr.addr.String() {
 		return
 	}
-	clctr.mux.Lock()
-	defer clctr.mux.Unlock()
+	clctr.Lock()
+	defer clctr.Unlock()
 	clctr.ttl = time.Now().Add(TTL)
 	p.start()
 	clctr.collected[pk.PacketID] = true

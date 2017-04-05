@@ -1,0 +1,8 @@
+{
+  "Package": "packeter",
+  "TSMaps": [{
+    "Key":"uint32",
+    "Val":"*collector",
+    "Name": "collectors"
+  }]
+}

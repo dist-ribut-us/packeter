@@ -134,10 +134,10 @@ func TestTTL(t *testing.T) {
 	assert.NoError(t, err)
 
 	p.Receive(pks[0], addr)
-	assert.Equal(t, 1, len(p.collectors))
+	assert.Equal(t, 1, len(p.collectors.Map))
 
 	time.Sleep(time.Millisecond * 2)
-	assert.Equal(t, 0, len(p.collectors))
+	assert.Equal(t, 0, len(p.collectors.Map))
 
 	m := <-p.Chan()
 	assert.Equal(t, errTimedOut.Error(), m.Err.Error())
