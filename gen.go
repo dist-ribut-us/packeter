@@ -1,4 +1,3 @@
-
 package packeter
 
 import (
@@ -31,7 +30,7 @@ func (t *collectors) set(key uint32, val *collector) {
 
 func (t *collectors) delete(keys ...uint32) {
 	t.Lock()
-	for _,key := range keys{
+	for _, key := range keys {
 		delete(t.Map, key)
 	}
 	t.Unlock()

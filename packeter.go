@@ -77,10 +77,10 @@ const errTimedOut = errors.String("Timed Out")
 // run will periodically clear out collectors that have timed out. When there
 // are no collectors, the thread will exit.
 func (p *Packeter) run() {
-	for keepRunning := true; keepRunning; time.Sleep(TTL) {
+	var next *collector
+	for {
 		now := time.Now()
 		var remove []uint32
-		keepRunning = false
 		p.collectors.RLock()
 		for id, clctr := range p.collectors.Map {
 			if clctr.ttl.Before(now) {
@@ -93,11 +93,17 @@ func (p *Packeter) run() {
 					}
 				}
 			} else {
-				keepRunning = true
+				if next == nil || next.ttl.After(clctr.ttl) {
+					next = clctr
+				}
 			}
 		}
 		p.collectors.RUnlock()
 		p.collectors.delete(remove...)
+		if next == nil {
+			break
+		}
+		time.Sleep(next.ttl.Sub(time.Now()))
 	}
 	p.Lock()
 	p.running = false
@@ -114,6 +120,15 @@ type collector struct {
 	ttl        time.Time
 	dataShards int
 	sync.Mutex
+}
+
+func newCollector(pk *Packet, addr *rnet.Addr) *collector {
+	return &collector{
+		data:       make([][]byte, pk.Packets),
+		collected:  make(map[uint16]bool),
+		addr:       addr,
+		dataShards: int(pk.DataShards()),
+	}
 }
 
 // Packetlength is the max packet length in bytes. Defaults to 10k. This cannot
@@ -200,20 +215,20 @@ func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 	if pk == nil {
 		return
 	}
-	clctr, ok := p.collectors.get(pk.PackageID)
+
+	p.collectors.Lock()
+	clctr, ok := p.collectors.Map[pk.PackageID]
 	if !ok {
-		clctr = &collector{
-			data:       make([][]byte, pk.Packets),
-			collected:  make(map[uint16]bool),
-			addr:       addr,
-			dataShards: int(pk.DataShards()),
-		}
-		p.collectors.set(pk.PackageID, clctr)
-	} else if addr.String() != clctr.addr.String() {
-		return
+		clctr = newCollector(pk, addr)
+		p.collectors.Map[pk.PackageID] = clctr
 	}
 	clctr.Lock()
+	p.collectors.Unlock()
 	defer clctr.Unlock()
+
+	if addr.String() != clctr.addr.String() {
+		return
+	}
 	clctr.ttl = time.Now().Add(TTL)
 	p.start()
 	clctr.collected[pk.PacketID] = true
