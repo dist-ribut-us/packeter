@@ -14,6 +14,7 @@ type Packet struct {
 	Data         []byte
 }
 
+// PackageID is 4, 2 for the PacketID, ParityShards and Packets each.
 const overhead = 4 + 3*2
 
 // Marshal serializes a Packet to a byte slice. Prepend allows additional

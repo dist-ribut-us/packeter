@@ -24,7 +24,7 @@ type Packeter struct {
 	Handler      func(*Package)
 }
 
-// start will start the loop the deletes timed out collectors if it is not
+// start will start the loop that deletes timed out collectors if it is not
 // running
 func (p *Packeter) start() {
 	p.Lock()
@@ -207,9 +207,9 @@ func (p *Packeter) Make(prefix, msg []byte, loss, reliability float64, id uint32
 }
 
 // Receive collects packets. When exactly enough packets have been recovered to
-// reconstruct the message, the message is returned as a byte slice. Otherwise
-// nil is returned. Receive can continue to collect packets after the message
-// has been constructed for reliability statistics.
+// reconstruct the message, the message is sent to the Handler if one is defined
+// or over the channel otherwise. Receive can continue to collect packets after
+// the message has been constructed for reliability statistics.
 func (p *Packeter) Receive(b []byte, addr *rnet.Addr) {
 	pk := Unmarshal(b)
 	if pk == nil {
